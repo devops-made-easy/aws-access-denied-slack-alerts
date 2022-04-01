@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  aws-access-denied-slack-alerts
+
+  Sample SAM Template for aws-access-denied-slack-alerts
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+
+Parameters:
+  SlackWebhookUrl:
+    Description: "Your slack webhook URL "
+    Type: String
+
+
+Resources:
+  UnAuthorizedEventAlertFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: aws_access_denied/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Environment:
+        Variables:
+          SLACK_WEBHOOK_URL:
+            Ref: SlackWebhookUrl
+
+  UnAuthorizedCallsAlertsRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Name: 'Unauthorized_Activity_Notify'
+      Description: 'Send Alerts to Slack for UnAuthorized Activity'
+      EventPattern: 
+        {
+          "detail": {
+            "errorCode": ["AccessDenied", "*UnauthorizedOperation"]
+            }
+        }
+      State: "ENABLED"
+      Targets: 
+        - 
+          Arn: !GetAtt UnAuthorizedEventAlertFunction.Arn
+          Id: 'SendToLambda'
+
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: "UnAuthorizedEventAlertFunction"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "UnAuthorizedCallsAlertsRule"
+          - "Arn"
+
+
+Outputs:
+  UnAuthorizedEventAlertFunction:
+    Description: "UnAuthorizedEventAlertFunction ARN"
+    Value: !GetAtt UnAuthorizedEventAlertFunction.Arn
